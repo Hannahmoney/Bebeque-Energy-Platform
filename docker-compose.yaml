@@ -1,0 +1,308 @@
+# # docker-compose.yml
+
+# services:
+
+#   # ── Infrastructure ───────────────────────────────────────────
+
+#   postgres:
+#     image: postgres:16-alpine
+#     # alpine is a minimal Linux variant — smaller image,
+#     # faster to pull. Teams use it for infrastructure
+#     # containers where size matters.
+#     environment:
+#       POSTGRES_USER: postgres
+#       POSTGRES_PASSWORD: postgres
+#       POSTGRES_DB: bebeque
+#     ports:
+#       - "5432:5432"
+#     volumes:
+#       # Mount the seed SQL file into the special directory
+#       # PostgreSQL checks on first startup.
+#       # Any .sql file here runs automatically.
+#       - ./scripts/seed-database.sql:/docker-entrypoint-initdb.d/seed.sql
+#       # Named volume persists data between docker compose down/up.
+#       # Without this, all data is lost every time you stop the stack.
+#       - postgres_data:/var/lib/postgresql/data
+#     healthcheck:
+#       # Compose uses this to know when PostgreSQL is actually
+#       # ready to accept connections — not just started.
+#       # Other services use depends_on with condition: service_healthy
+#       # to wait for this before starting.
+#       test: ["CMD-SHELL", "pg_isready -U postgres"]
+#       interval: 5s
+#       timeout: 5s
+#       retries: 5
+
+#   redis:
+#     image: redis:7-alpine
+#     ports:
+#       - "6379:6379"
+#     healthcheck:
+#       test: ["CMD", "redis-cli", "ping"]
+#       interval: 5s
+#       timeout: 5s
+#       retries: 5
+
+#   localstack:
+#     image: localstack/localstack:3.4
+#     ports:
+#       - "4566:4566"
+#     environment:
+#       # Tell LocalStack which services to emulate.
+#       # We only need SQS and S3 — keeping it minimal
+#       # makes startup faster.
+#       SERVICES: sqs,s3
+#       AWS_DEFAULT_REGION: eu-west-1
+#       # Persistence means LocalStack remembers your queues
+#       # and buckets between restarts
+#       PERSISTENCE: 1
+#     volumes:
+#       # Mount the init script — LocalStack runs any scripts
+#       # in this directory after it finishes starting up
+#       - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init.sh
+#       - localstack_data:/var/lib/localstack
+#     healthcheck:
+#       test: ["CMD-SHELL", "awslocal sqs list-queues --region eu-west-1"]
+#       interval: 10s
+#       timeout: 10s
+#       retries: 10
+
+#   # ── Application services ─────────────────────────────────────
+
+#   analytics-api:
+#     build:
+#       context: ./services/analytics-api
+#       dockerfile: Dockerfile
+#     ports:
+#       - "8000:8000"
+#     environment:
+#       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bebeque
+#       REDIS_URL: redis://redis:6379
+#       ENVIRONMENT: development
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       redis:
+#         condition: service_healthy
+#     # Restart the container if it crashes.
+#     # Teams call this the "restart policy."
+#     # on-failure means restart only on non-zero exit codes —
+#     # not if you manually stop it.
+#     restart: on-failure
+#     # Mount code directly into the container.
+#     # Changes to your code appear instantly without rebuilding.
+#     # Teams call this a "bind mount" or "volume mount for hot reload."
+#     # Only used locally — never in production.
+#     volumes:
+#       - ./services/analytics-api/app:/app/app
+
+#   biomass-ingestion:
+#     build:
+#       context: ./services/biomass-ingestion
+#       dockerfile: Dockerfile
+#     environment:
+#       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bebeque
+#       # LocalStack SQS URL format:
+#       # http://localstack:4566/000000000000/queue-name
+#       # 000000000000 is a fake AWS account ID LocalStack uses
+#       SQS_QUEUE_URL: http://localstack:4566/000000000000/biomass-queue
+#       AWS_DEFAULT_REGION: eu-west-1
+#       # These fake credentials are required by boto3 even when
+#       # pointing at LocalStack — it refuses to run without them.
+#       # They are not real AWS credentials.
+#       AWS_ACCESS_KEY_ID: test
+#       AWS_SECRET_ACCESS_KEY: test
+#       # Tell boto3 to use LocalStack instead of real AWS
+#       AWS_ENDPOINT_URL: http://localstack:4566
+#       ENVIRONMENT: development
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       localstack:
+#         condition: service_healthy
+#     restart: on-failure
+#     volumes:
+#       - ./services/biomass-ingestion/app:/app/app
+
+#   data-ingestion:
+#     build:
+#       context: ./services/data-ingestion
+#       dockerfile: Dockerfile
+#     environment:
+#       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bebeque
+#       SQS_QUEUE_URL: http://localstack:4566/000000000000/data-ingestion-queue
+#       S3_BUCKET_NAME: bebeque-uploads
+#       AWS_DEFAULT_REGION: eu-west-1
+#       AWS_ACCESS_KEY_ID: test
+#       AWS_SECRET_ACCESS_KEY: test
+#       AWS_ENDPOINT_URL: http://localstack:4566
+#       ENVIRONMENT: development
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       localstack:
+#         condition: service_healthy
+#     restart: on-failure
+#     volumes:
+#       - ./services/data-ingestion/app:/app/app
+
+#   notification-service:
+#     build:
+#       context: ./services/notification-service
+#       dockerfile: Dockerfile
+#     ports:
+#       - "8001:8000"
+#     environment:
+#       SQS_QUEUE_URL: http://localstack:4566/000000000000/notifications-queue
+#       AWS_DEFAULT_REGION: eu-west-1
+#       AWS_ACCESS_KEY_ID: test
+#       AWS_SECRET_ACCESS_KEY: test
+#       AWS_ENDPOINT_URL: http://localstack:4566
+#       ENVIRONMENT: development
+#     depends_on:
+#       localstack:
+#         condition: service_healthy
+#     restart: on-failure
+#     volumes:
+#       - ./services/notification-service/app:/app/app
+
+# # Named volumes persist data between restarts
+# volumes:
+#   postgres_data:
+#   localstack_data:
+
+services:
+
+  # ── Infrastructure ───────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bebeque
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./scripts/seed-database.sql:/docker-entrypoint-initdb.d/seed.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  localstack:
+    image: localstack/localstack:3.4
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: sqs,s3
+      AWS_DEFAULT_REGION: us-east-1
+      PERSISTENCE: 1
+    volumes:
+      - ./scripts/init-localstack.sh:/etc/localstack/init/ready.d/init.sh
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs list-queues --region us-east-1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # ── Application services ─────────────────────────────────────
+
+  analytics-api:
+    build:
+      context: ./services/analytics-api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bebeque
+      REDIS_URL: redis://redis:6379
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: on-failure
+    volumes:
+      - ./services/analytics-api/app:/app/app
+
+  biomass-ingestion:
+    build:
+      context: ./services/biomass-ingestion
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bebeque
+      SQS_QUEUE_URL: http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/biomass-queue
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: on-failure
+    volumes:
+      - ./services/biomass-ingestion/app:/app/app
+
+  data-ingestion:
+    build:
+      context: ./services/data-ingestion
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/bebeque
+      SQS_QUEUE_URL: http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/data-ingestion-queue
+      S3_BUCKET_NAME: bebeque-uploads
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    restart: on-failure
+    volumes:
+      - ./services/data-ingestion/app:/app/app
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      SQS_QUEUE_URL: http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/notifications-queue
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_ENDPOINT_URL: http://localstack:4566
+      ENVIRONMENT: development
+    depends_on:
+      localstack:
+        condition: service_healthy
+    restart: on-failure
+    volumes:
+      - ./services/notification-service/app:/app/app
+
+volumes:
+  postgres_data:
+  localstack_data:
