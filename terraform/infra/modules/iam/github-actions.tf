@@ -38,16 +38,22 @@ resource "aws_iam_role" "github_actions" {
           Federated = aws_iam_openid_connect_provider.github.arn
         }
         Action = "sts:AssumeRoleWithWebIdentity"
+
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
           StringLike = {
-            # Scoped to main branch only — feature branches cannot deploy
-            "token.actions.githubusercontent.com:sub" = "repo:Hannahmoney/Bebeque-Energy-Platform:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" = [
+              "repo:Hannahmoney/Bebeque-Energy-Platform:ref:refs/heads/main",
+              "repo:Hannahmoney/Bebeque-Energy-Platform:environment:staging",
+              "repo:Hannahmoney/Bebeque-Energy-Platform:environment:production"
+            ]
+          }
+
+
           }
         }
-      }
     ]
   })
 
