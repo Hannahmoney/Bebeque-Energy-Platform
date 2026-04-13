@@ -1,0 +1,331 @@
+Here is your Step 7 documentation:
+
+```markdown
+# Step 7: Helm Charts — Build Log & Decisions
+
+## What Step 7 Delivered
+
+One reusable Helm chart that deploys all four Bebeque Energy
+microservices to EKS. Validated locally with helm lint and
+helm template. Deployed live to staging and confirmed running.
+
+---
+
+## The Core Design Decision — One Chart, Not Four
+
+The first decision in Step 7 was the chart architecture.
+
+Two options existed:
+- Four separate charts, one per service
+- One base chart with per-service values files
+
+We chose one base chart. The reason is the golden path principle.
+When a fifth service is onboarded, a developer creates one new
+values file — not an entire chart. When a bug is fixed in
+deployment.yaml it is fixed once, not four times. Four separate
+charts drift over time and become inconsistent. One chart with
+values files is the platform team pattern.
+
+---
+
+## Final Folder Structure
+
+```
+helm/
+└── bebeque-service/
+    ├── Chart.yaml
+    ├── values.yaml
+    ├── charts/
+    ├── templates/
+    │   ├── _helpers.tpl
+    │   ├── deployment.yaml
+    │   ├── service.yaml
+    │   ├── hpa.yaml
+    │   ├── keda-scaledobject.yaml
+    │   ├── serviceaccount.yaml
+    │   ├── role.yaml
+    │   ├── rolebinding.yaml
+    │   └── networkpolicy.yaml
+    └── values/
+        ├── analytics-api.staging.yaml
+        ├── analytics-api.production.yaml
+        ├── biomass-ingestion.staging.yaml
+        ├── biomass-ingestion.production.yaml
+        ├── data-ingestion.staging.yaml
+        ├── data-ingestion.production.yaml
+        ├── notification-service.staging.yaml
+        └── notification-service.production.yaml
+```
+
+---
+
+## What Each Template Does
+
+### _helpers.tpl
+Defines three reusable functions used across every template:
+- bebeque-service.name — the chart name, max 63 characters
+- bebeque-service.fullname — the Helm release name, used for
+  all resource names
+- bebeque-service.labels — common labels on every resource,
+  includes chart version for traceability
+- bebeque-service.selectorLabels — stable labels used in
+  Deployment selectors and Service selectors. Never includes
+  chart version because selector labels cannot change after
+  a Deployment is created — Kubernetes rejects the update.
+
+### deployment.yaml
+The core template. Every service uses this regardless of type.
+Key decisions:
+- replicas comes from values — HPA and KEDA own it at runtime
+- checksum/values annotation forces a rolling restart whenever
+  any value changes, including env vars. Without this, a
+  config change would not trigger a new rollout.
+- Pod anti-affinity is a soft preference — two pods of the
+  same service will prefer different nodes. Does not block
+  scheduling if nodes are scarce.
+- Ports block only renders when service.enabled is true.
+  SQS workers have no HTTP port.
+- Probes only render when probes.enabled is true.
+  SQS workers have no health endpoint.
+- terminationGracePeriodSeconds is set per service in values
+  to match the SQS visibility timeout. biomass-ingestion uses
+  30s. data-ingestion uses 120s. This gives workers time to
+  finish processing messages before the pod is killed.
+
+### service.yaml
+Wrapped in a conditional. Only renders when service.enabled
+is true. The two SQS workers — biomass-ingestion and
+data-ingestion — set service.enabled: false and this file
+produces nothing for them. Type is ClusterIP — traffic comes
+from the ALB which lives outside the cluster in AWS.
+
+### hpa.yaml
+Wrapped in a conditional. Only renders when hpa.enabled is
+true. analytics-api and notification-service use HPA on CPU.
+The two SQS workers use KEDA instead and have hpa.enabled: false.
+Uses autoscaling/v2 API — the current stable version.
+
+### keda-scaledobject.yaml
+Wrapped in a conditional. Only renders when keda.enabled is
+true. biomass-ingestion and data-ingestion use this. Scales
+on SQS queue depth. minReplicaCount: 0 means the worker scales
+to zero when the queue is empty — no idle pods, no idle cost.
+Uses identityOwner: pod so KEDA reads queue depth using the
+pod's IRSA credentials. No static AWS keys.
+
+### serviceaccount.yaml
+Always renders. Carries the IRSA annotation that links the
+Kubernetes service account to the AWS IAM role. This is how
+pods get AWS credentials — EKS exchanges the pod's projected
+service account token for temporary scoped AWS credentials.
+No access keys anywhere.
+
+### role.yaml
+Always renders. An explicitly empty Kubernetes RBAC Role.
+rules: [] means this service account has zero Kubernetes API
+permissions. The Role exists to make that decision visible and
+auditable rather than relying on the default behaviour.
+
+### rolebinding.yaml
+Always renders. Binds the service account to the empty Role.
+Scoped to the namespace — cannot grant cross-namespace access.
+
+### networkpolicy.yaml
+Always renders. Default deny on ingress and egress with
+explicit allow rules. Currently:
+- Ingress: allow on the service port for HTTP services only
+- Egress: allow all (tightened in Step 11)
+This is the foundation. Step 11 adds OPA Gatekeeper and
+tightens egress to only what each service needs.
+
+---
+
+## What is Intentionally Missing
+
+### Secrets
+DATABASE_URL, REDIS_URL, DB_PASSWORD, and REDIS_AUTH_TOKEN
+are not in the values files. These come from AWS Secrets
+Manager via External Secrets Operator in Step 11. The
+envFrom field in deployment.yaml is already there waiting.
+
+### Pod Security Context
+runAsNonRoot, readOnlyRootFilesystem, and
+allowPrivilegeEscalation: false are not set yet. This is
+Step 11 work alongside OPA Gatekeeper.
+
+### NetworkPolicy egress tightening
+Egress is currently open. Step 11 locks it down per service
+so each pod can only reach what it needs — RDS, Redis, SQS,
+or ECR depending on the service.
+
+### Metrics server
+HPA shows cpu: unknown because the metrics server is not
+installed. This installs automatically in Step 10 with
+kube-prometheus-stack.
+
+---
+
+## Issues Encountered and Fixed
+
+### Issue 1 — helm create failed due to space in folder name
+
+The project folder is named Bebeque nergy Project with a
+space. Running helm create helm/bebeque-service failed with:
+
+  Error: GetFileAttributesEx ... The system cannot find
+  the file specified.
+
+Helm created the folder but then failed to verify it because
+of the path with spaces. The fix was to create the folder
+structure manually:
+
+  New-Item -ItemType Directory -Path "helm/bebeque-service/templates"
+  New-Item -ItemType Directory -Path "helm/bebeque-service/charts"
+  New-Item -ItemType Directory -Path "helm/bebeque-service/values"
+
+Then create every file individually with New-Item.
+
+### Issue 2 — Old content in serviceaccount.yaml and service.yaml
+
+During the first template render, the output showed commented-out
+duplicate content from a previous version of both files. The
+files had two versions merged together from earlier in the
+session. Fixed by selecting all content in VS Code with Ctrl+A
+and replacing with the clean version.
+
+### Issue 3 — deployment.yaml YAML parse error on helm lint
+
+First helm lint run returned:
+
+  ERROR templates/deployment.yaml: unable to parse YAML:
+  error converting YAML to JSON: yaml: line 102:
+  did not find expected key
+
+This was a YAML indentation error introduced during copy-paste.
+Fixed by replacing the full file contents in VS Code.
+
+### Issue 4 — Pod CrashLoopBackOff on live install
+
+After helm install analytics-api to staging the pod went into
+CrashLoopBackOff. kubectl logs showed:
+
+  pydantic_core.ValidationError: 2 validation errors for Settings
+  database_url: Field required
+  redis_url: Field required
+
+Root cause: analytics-api uses Pydantic Settings which
+validates required environment variables at startup. DATABASE_URL
+and REDIS_URL are not in the values file — they are intentionally
+deferred to Step 11. The app crashed before FastAPI could start,
+so the health check got connection refused.
+
+Fix for the live test: added temporary placeholder values to
+analytics-api.staging.yaml to unblock the pod start:
+
+  DATABASE_URL: "postgresql://postgres:placeholder@localhost:5432/bebeque"
+  REDIS_URL: "redis://localhost:6379"
+
+After confirming the pod reached 1/1 Running, these placeholders
+were removed from the values file. The chart is correct. The
+secrets wiring is a Step 11 concern.
+
+### Issue 5 — kubectl credentials error after update-kubeconfig
+
+After running aws eks update-kubeconfig, kubectl get nodes
+returned:
+
+  error: You must be logged in to the server (the server has
+  asked for the client to provide credentials)
+
+Root cause: the EKS cluster uses API_AND_CONFIG_MAP
+authentication mode. The IAM user nnenna was not in the
+cluster access entries — only the role that ran terraform
+apply had access.
+
+Fix: added an EKS access entry for the nnenna IAM user and
+associated the AmazonEKSClusterAdminPolicy:
+
+  aws eks create-access-entry \
+    --cluster-name bebeque-eks-cluster \
+    --principal-arn arn:aws:iam::478544567935:user/nnenna \
+    --type STANDARD
+
+  aws eks associate-access-policy \
+    --cluster-name bebeque-eks-cluster \
+    --principal-arn arn:aws:iam::478544567935:user/nnenna \
+    --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+    --access-scope type=cluster
+
+---
+
+## Changes From the Initial Plan
+
+### RBAC added — not in original plan
+The original plan had no Role or RoleBinding templates.
+Added during Step 7 after reviewing the security posture.
+An explicit empty Role and RoleBinding on every service makes
+the least-privilege decision auditable rather than implicit.
+
+### terminationGracePeriodSeconds moved to values
+Originally hardcoded at 30s in deployment.yaml. Changed to
+a values field so data-ingestion can set 120s to match its
+SQS visibility timeout without forking the template.
+
+### values/ subfolder for environment values files
+Originally the values files were going to sit at the chart
+root. Moved into a values/ subfolder to keep the chart root
+clean and make the structure easier to navigate as more
+services are added.
+
+### No .helmignore kept from scaffold
+helm create generates a .helmignore file. Removed it — not
+needed for this chart pattern since we are not packaging
+and distributing the chart through a registry. ArgoCD reads
+it directly from Git.
+
+---
+
+## Live Deployment Confirmation
+
+Namespace created: staging, production
+analytics-api deployed to staging via helm install
+Pod confirmed 1/1 Running
+All resources verified with kubectl:
+
+  kubectl get all -n staging
+  kubectl get networkpolicy -n staging
+  kubectl get rolebinding -n staging
+  kubectl get serviceaccount -n staging
+
+Resources present and correct:
+- Deployment: 1/1 available
+- Service: ClusterIP on port 8000
+- HPA: watching CPU, min 1 max 3 replicas
+- NetworkPolicy: ingress on 8000, egress open
+- RoleBinding: analytics-api bound to empty Role
+- ServiceAccount: analytics-api with IRSA annotation
+
+All four images pushed to ECR:
+- bebeque/analytics-api:latest
+- bebeque/biomass-ingestion:latest
+- bebeque/data-ingestion:latest
+- bebeque/notification-service:latest
+
+Step 8 replaces latest tags with Git SHA tags via CI/CD.
+
+---
+
+## Security Posture at End of Step 7
+
+| Area                      | Status         | Step    |
+|---------------------------|----------------|---------|
+| AWS credentials (IRSA)    | Done           | Step 7  |
+| Kubernetes RBAC           | Done           | Step 7  |
+| Secrets management        | Not done       | Step 11 |
+| NetworkPolicy foundation  | Done           | Step 7  |
+| NetworkPolicy hardening   | Not done       | Step 11 |
+| Pod security context      | Not done       | Step 11 |
+| Image immutability (ECR)  | Done           | Step 6  |
+| Image SHA tagging         | Not done       | Step 8  |
+| Metrics server            | Not done       | Step 10 |
+```

@@ -39,3 +39,5 @@ test-biomass.json
 test-ingest.json
 test-notification.json
 test-readings.csv
+
+secrets/

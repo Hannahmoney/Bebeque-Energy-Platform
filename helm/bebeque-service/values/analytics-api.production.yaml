@@ -10,7 +10,7 @@ image:
 
 serviceAccount:
   name: analytics-api
-  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-analytics-api-role"  # fill in after terraform apply finishes
+  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-analytics-api-role"
 
 service:
   enabled: true
@@ -31,6 +31,10 @@ keda:
 env:
   APP_ENV: production
   AWS_REGION: us-east-1
+
+envFrom:
+  - secretRef:
+      name: analytics-api-secrets
 
 probes:
   enabled: true

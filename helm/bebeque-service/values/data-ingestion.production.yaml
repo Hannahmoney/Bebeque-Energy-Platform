@@ -10,7 +10,7 @@ image:
 
 serviceAccount:
   name: data-ingestion
-  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-data-ingestion-role"  # fill in after terraform apply finishes
+  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-data-ingestion-role"
 
 service:
   enabled: false
@@ -37,6 +37,10 @@ env:
   SQS_WAIT_TIME_SECONDS: "20"
   SQS_VISIBILITY_TIMEOUT: "120"
   S3_BUCKET: bebeque-uploads-production
+
+envFrom:
+  - secretRef:
+      name: data-ingestion-secrets
 
 probes:
   enabled: false

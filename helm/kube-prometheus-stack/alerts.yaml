@@ -1,0 +1,61 @@
+additionalPrometheusRulesMap:
+  bebeque-alerts:
+    groups:
+      - name: bebeque.pods
+        rules:
+          - alert: PodCrashLooping
+            expr: rate(kube_pod_container_status_restarts_total[15m]) * 60 * 5 > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Pod {{ $labels.pod }} is crash looping"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted more than once in the last 5 minutes."
+
+          - alert: PodNotReady
+            expr: kube_pod_status_ready{condition="false"} == 1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Pod {{ $labels.pod }} is not ready"
+              description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been not ready for more than 5 minutes."
+
+      - name: bebeque.resources
+        rules:
+          - alert: HighCPUUsage
+            expr: |
+              sum(rate(container_cpu_usage_seconds_total{namespace=~"production|staging"}[5m])) by (pod, namespace)
+              /
+              sum(kube_pod_container_resource_limits{resource="cpu", namespace=~"production|staging"}) by (pod, namespace)
+              > 0.85
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High CPU on pod {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is using more than 85% of its CPU limit for 10 minutes."
+
+          - alert: HighMemoryUsage
+            expr: |
+              sum(container_memory_working_set_bytes{namespace=~"production|staging"}) by (pod, namespace)
+              /
+              sum(kube_pod_container_resource_limits{resource="memory", namespace=~"production|staging"}) by (pod, namespace)
+              > 0.85
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High memory on pod {{ $labels.pod }}"
+              description: "Pod {{ $labels.pod }} in {{ $labels.namespace }} is using more than 85% of its memory limit for 10 minutes."
+
+      - name: bebeque.sqs
+        rules:
+          - alert: SQSDLQMessagesHigh
+            expr: aws_sqs_approximate_number_of_messages_visible{queue_name=~".*dlq.*"} > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Messages in DLQ {{ $labels.queue_name }}"
+              description: "Dead letter queue {{ $labels.queue_name }} has {{ $value }} messages. Investigate failed processing."

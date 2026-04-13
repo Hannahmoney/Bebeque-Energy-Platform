@@ -10,7 +10,7 @@ image:
 
 serviceAccount:
   name: biomass-ingestion
-  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-biomass-ingestion-role"  # fill in after terraform apply finishes
+  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-biomass-ingestion-role"
 
 service:
   enabled: false
@@ -36,6 +36,10 @@ env:
   SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/478544567935/bebeque-biomass-queue"
   SQS_WAIT_TIME_SECONDS: "20"
   SQS_VISIBILITY_TIMEOUT: "30"
+
+envFrom:
+  - secretRef:
+      name: biomass-ingestion-secrets
 
 probes:
   enabled: false

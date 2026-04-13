@@ -29,3 +29,7 @@ output "github_actions_role_arn" {
   description = "IAM role ARN for GitHub Actions OIDC pipeline"
   value       = module.iam.github_actions_role_arn
 }
+
+output "external_secrets_role_arn" {
+  value = module.iam.external_secrets_role_arn
+}

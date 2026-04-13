@@ -10,7 +10,7 @@ image:
 
 serviceAccount:
   name: biomass-ingestion
-  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-biomass-ingestion-role"  # fill in after terraform apply finishes
+  iamRoleArn: ""  # fill in after terraform apply finishes
 
 service:
   enabled: false

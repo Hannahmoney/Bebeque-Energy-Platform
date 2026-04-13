@@ -16,7 +16,7 @@ locals {
 }
 
 # --- analytics-api ---
-# Needs to: connect to RDS, send to notifications queue.
+# Needs to: connect to RDS, send to notifications queue, read both secrets.
 # Does NOT need: S3, biomass queue, data-ingestion queue.
 
 resource "aws_iam_role" "analytics_api" {
@@ -69,13 +69,24 @@ resource "aws_iam_role_policy" "analytics_api" {
           "sqs:GetQueueUrl"
         ]
         Resource = var.sqs_queue_arns["notifications"]
+      },
+      {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/database-*",
+          "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/redis-*"
+        ]
       }
     ]
   })
 }
 
 # --- biomass-ingestion ---
-# Needs to: receive and delete from biomass queue only.
+# Needs to: receive and delete from biomass queue only, read database secret.
 # GetQueueUrl is required — the SDK needs it to resolve the queue endpoint.
 
 resource "aws_iam_role" "biomass_ingestion" {
@@ -122,6 +133,14 @@ resource "aws_iam_role_policy" "biomass_ingestion" {
           "sqs:GetQueueUrl"
         ]
         Resource = var.sqs_queue_arns["biomass"]
+      },
+      {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/database-*"
       }
     ]
   })
@@ -129,7 +148,7 @@ resource "aws_iam_role_policy" "biomass_ingestion" {
 
 # --- data-ingestion ---
 # Needs to: receive and delete from data-ingestion queue, get objects
-# from S3 uploads prefix, delete processed files from S3.
+# from S3 uploads prefix, delete processed files from S3, read database secret.
 # Scoped to uploads/* prefix only — cannot touch reports/.
 
 resource "aws_iam_role" "data_ingestion" {
@@ -178,6 +197,14 @@ resource "aws_iam_role_policy" "data_ingestion" {
         Resource = var.sqs_queue_arns["data-ingestion"]
       },
       {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/database-*"
+      },
+      {
         Sid    = "S3GetUploads"
         Effect = "Allow"
         Action = [
@@ -204,7 +231,7 @@ resource "aws_iam_role_policy" "data_ingestion" {
 }
 
 # --- notification-service ---
-# Needs to: receive and delete from notifications queue only.
+# Needs to: receive and delete from notifications queue only, read database secret.
 
 resource "aws_iam_role" "notification_service" {
   name = "${var.project}-notification-service-role"
@@ -250,6 +277,69 @@ resource "aws_iam_role_policy" "notification_service" {
           "sqs:GetQueueUrl"
         ]
         Resource = var.sqs_queue_arns["notifications"]
+      },
+      {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/database-*"
+      }
+    ]
+  })
+}
+
+
+# --- external-secrets-operator ---
+# ESO needs permission to read all Bebeque secrets from Secrets Manager.
+# This role is assumed by the ESO service account in the external-secrets namespace.
+
+resource "aws_iam_role" "external_secrets" {
+  name = "${var.project}-external-secrets-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = var.oidc_provider_arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${var.oidc_provider}:sub" = "system:serviceaccount:external-secrets:external-secrets"
+          "${var.oidc_provider}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+
+  tags = {
+    Name        = "${var.project}-external-secrets-role"
+    Project     = var.project
+    Environment = var.environment
+  }
+}
+
+resource "aws_iam_role_policy" "external_secrets" {
+  name = "${var.project}-external-secrets-policy"
+  role = aws_iam_role.external_secrets.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SecretsManagerRead"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/database-*",
+          "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:bebeque/production/redis-*"
+        ]
       }
     ]
   })

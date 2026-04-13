@@ -34,6 +34,10 @@ env:
   SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/478544567935/bebeque-notifications-queue"
   SQS_WAIT_TIME_SECONDS: "20"
 
+envFrom:
+  - secretRef:
+      name: notification-service-secrets
+
 probes:
   enabled: true
   liveness:
@@ -57,3 +61,5 @@ terminationGracePeriodSeconds: 30
 
 networkPolicy:
   enabled: true
+
+
