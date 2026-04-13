@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "bebeque-service.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "bebeque-service.labels" . | nindent 4 }}
+rules: []
+# Explicitly empty — these pods do not need Kubernetes API access.
+# This Role exists to make that decision visible and auditable.
+# If a future service needs specific Kubernetes API access,
+# add a targeted rule here rather than granting broad permissions.

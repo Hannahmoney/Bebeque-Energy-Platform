@@ -1,0 +1,55 @@
+nameOverride: biomass-ingestion
+fullnameOverride: biomass-ingestion
+
+namespace: staging
+
+image:
+  repository: "478544567935.dkr.ecr.us-east-1.amazonaws.com/bebeque/biomass-ingestion"
+  tag: "latest"
+  pullPolicy: Always
+
+serviceAccount:
+  name: biomass-ingestion
+  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-biomass-ingestion-role"  # fill in after terraform apply finishes
+
+service:
+  enabled: false
+
+replicaCount: 0
+
+hpa:
+  enabled: false
+
+keda:
+  enabled: true
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  pollingInterval: 30
+  cooldownPeriod: 300
+  sqsQueueUrl: "https://sqs.us-east-1.amazonaws.com/478544567935/bebeque-biomass-queue"
+  sqsQueueLength: "5"
+  awsRegion: us-east-1
+
+env:
+  APP_ENV: staging
+  AWS_REGION: us-east-1
+  SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/478544567935/bebeque-biomass-queue"
+  SQS_WAIT_TIME_SECONDS: "20"
+  SQS_VISIBILITY_TIMEOUT: "30"
+
+probes:
+  enabled: false
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "300m"
+    memory: "256Mi"
+
+# Matches SQS visibility timeout of 30s
+terminationGracePeriodSeconds: 30
+
+networkPolicy:
+  enabled: true

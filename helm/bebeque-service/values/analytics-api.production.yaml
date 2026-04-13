@@ -1,0 +1,57 @@
+nameOverride: analytics-api
+fullnameOverride: analytics-api
+
+namespace: production
+
+image:
+  repository: "478544567935.dkr.ecr.us-east-1.amazonaws.com/bebeque/analytics-api"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  name: analytics-api
+  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-analytics-api-role"  # fill in after terraform apply finishes
+
+service:
+  enabled: true
+  port: 8000
+  targetPort: 8000
+
+replicaCount: 2
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+keda:
+  enabled: false
+
+env:
+  APP_ENV: production
+  AWS_REGION: us-east-1
+
+probes:
+  enabled: true
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+resources:
+  requests:
+    cpu: "200m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+terminationGracePeriodSeconds: 30
+
+networkPolicy:
+  enabled: true

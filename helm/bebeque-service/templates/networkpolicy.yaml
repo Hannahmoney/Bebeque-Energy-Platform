@@ -1,0 +1,29 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "bebeque-service.fullname" . }}-netpol
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "bebeque-service.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "bebeque-service.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- if .Values.service.enabled }}
+    # Allow inbound on the service port.
+    # Tightened to specific sources in Step 11.
+    - ports:
+        - port: {{ .Values.service.targetPort }}
+          protocol: TCP
+    {{- end }}
+  egress:
+    # Allow all egress for now.
+    # SQS, RDS, ElastiCache, and ECR all need outbound access.
+    # Tightened in Step 11 with OPA Gatekeeper and NetworkPolicy hardening.
+    - {}
+{{- end }}

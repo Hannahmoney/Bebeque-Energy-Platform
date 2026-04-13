@@ -1,0 +1,25 @@
+{{- if .Values.keda.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "bebeque-service.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "bebeque-service.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "bebeque-service.fullname" . }}
+  minReplicaCount: {{ .Values.keda.minReplicaCount }}
+  maxReplicaCount: {{ .Values.keda.maxReplicaCount }}
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: {{ .Values.keda.sqsQueueUrl }}
+        queueLength: {{ .Values.keda.sqsQueueLength | quote }}
+        awsRegion: {{ .Values.keda.awsRegion }}
+        # KEDA uses the pod's IRSA credentials to read queue depth.
+        # No static AWS keys needed.
+        identityOwner: pod
+{{- end }}

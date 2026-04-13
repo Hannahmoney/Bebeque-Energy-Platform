@@ -1,0 +1,71 @@
+# values.yaml — schema and defaults for bebeque-service chart
+# This file is never deployed directly.
+# Every field referenced in any template must have a default here.
+# Override per service in values/<service>.<env>.yaml
+
+nameOverride: ""
+fullnameOverride: ""
+
+namespace: ""
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  name: ""
+  iamRoleArn: ""
+
+service:
+  enabled: true
+  port: 8000
+  targetPort: 8000
+
+replicaCount: 1
+
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+keda:
+  enabled: false
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  pollingInterval: 30
+  cooldownPeriod: 300
+  sqsQueueUrl: ""
+  sqsQueueLength: "5"
+  awsRegion: us-east-1
+
+env: {}
+
+envFrom: []
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+probes:
+  enabled: false
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+terminationGracePeriodSeconds: 30
+
+networkPolicy:
+  enabled: true
+
+podLabels: {}

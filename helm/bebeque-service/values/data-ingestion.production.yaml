@@ -1,0 +1,55 @@
+nameOverride: data-ingestion
+fullnameOverride: data-ingestion
+
+namespace: production
+
+image:
+  repository: "478544567935.dkr.ecr.us-east-1.amazonaws.com/bebeque/data-ingestion"
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  name: data-ingestion
+  iamRoleArn: "arn:aws:iam::478544567935:role/bebeque-data-ingestion-role"  # fill in after terraform apply finishes
+
+service:
+  enabled: false
+
+replicaCount: 0
+
+hpa:
+  enabled: false
+
+keda:
+  enabled: true
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  pollingInterval: 30
+  cooldownPeriod: 300
+  sqsQueueUrl: "https://sqs.us-east-1.amazonaws.com/478544567935/bebeque-data-ingestion-queue"
+  sqsQueueLength: "5"
+  awsRegion: us-east-1
+
+env:
+  APP_ENV: production
+  AWS_REGION: us-east-1
+  SQS_QUEUE_URL: "https://sqs.us-east-1.amazonaws.com/478544567935/bebeque-data-ingestion-queue"
+  SQS_WAIT_TIME_SECONDS: "20"
+  SQS_VISIBILITY_TIMEOUT: "120"
+  S3_BUCKET: bebeque-uploads-production
+
+probes:
+  enabled: false
+
+resources:
+  requests:
+    cpu: "200m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "1Gi"
+
+terminationGracePeriodSeconds: 120
+
+networkPolicy:
+  enabled: true
