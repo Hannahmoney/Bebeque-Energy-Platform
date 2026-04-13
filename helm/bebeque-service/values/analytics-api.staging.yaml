@@ -31,6 +31,8 @@ keda:
 env:
   APP_ENV: staging
   AWS_REGION: us-east-1
+  # DATABASE_URL: "postgresql://postgres:placeholder@localhost:5432/bebeque"
+  # REDIS_URL: "redis://localhost:6379"
 
 probes:
   enabled: true
