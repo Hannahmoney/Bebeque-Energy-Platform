@@ -1,0 +1,20 @@
+name: Deploy analytics-api
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/analytics-api/**'
+      - 'helm/bebeque-service/**'
+      - '.github/workflows/deploy-analytics-api.yml'
+      - '.github/workflows/deploy-service.yml'
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service-name: analytics-api
+      helm-values-file: helm/bebeque-service/values/analytics-api.staging.yaml
+    secrets:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}

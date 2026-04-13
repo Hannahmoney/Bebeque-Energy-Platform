@@ -1,0 +1,20 @@
+name: Deploy biomass-ingestion
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/biomass-ingestion/**'
+      - 'helm/bebeque-service/**'
+      - '.github/workflows/deploy-biomass-ingestion.yml'
+      - '.github/workflows/deploy-service.yml'
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service-name: biomass-ingestion
+      helm-values-file: helm/bebeque-service/values/biomass-ingestion.staging.yaml
+    secrets:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}

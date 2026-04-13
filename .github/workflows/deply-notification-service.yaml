@@ -1,0 +1,20 @@
+name: Deploy notification-service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'services/notification-service/**'
+      - 'helm/bebeque-service/**'
+      - '.github/workflows/deploy-notification-service.yml'
+      - '.github/workflows/deploy-service.yml'
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service-name: notification-service
+      helm-values-file: helm/bebeque-service/values/notification-service.staging.yaml
+    secrets:
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
