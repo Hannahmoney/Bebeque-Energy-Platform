@@ -7,3 +7,8 @@ output "service_role_arns" {
     notification-service = aws_iam_role.notification_service.arn
   }
 }
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions OIDC pipeline"
+  value       = aws_iam_role.github_actions.arn
+}

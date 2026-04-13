@@ -24,3 +24,8 @@ output "redis_endpoint" {
   value       = module.elasticache.redis_endpoint
   sensitive   = true
 }
+
+output "github_actions_role_arn" {
+  description = "IAM role ARN for GitHub Actions OIDC pipeline"
+  value       = module.iam.github_actions_role_arn
+}
