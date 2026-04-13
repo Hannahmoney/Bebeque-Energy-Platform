@@ -55,13 +55,12 @@ jobs:
         run: |
           docker build \
             -t ${{ env.ECR_REGISTRY }}/bebeque/${{ inputs.service-name }}:${{ steps.meta.outputs.tag }} \
-            -t ${{ env.ECR_REGISTRY }}/bebeque/${{ inputs.service-name }}:latest \
             services/${{ inputs.service-name }}
 
       - name: Push to ECR
         run: |
           docker push ${{ env.ECR_REGISTRY }}/bebeque/${{ inputs.service-name }}:${{ steps.meta.outputs.tag }}
-          docker push ${{ env.ECR_REGISTRY }}/bebeque/${{ inputs.service-name }}:latest
+      
 
   deploy-staging:
     name: Deploy to Staging
