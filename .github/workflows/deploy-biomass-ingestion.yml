@@ -19,6 +19,7 @@ jobs:
     uses: ./.github/workflows/deploy-service.yml
     with:
       service-name: biomass-ingestion
-      helm-values-file: helm/bebeque-service/values/biomass-ingestion.staging.yaml
+      helm-values-staging: helm/bebeque-service/values/biomass-ingestion.staging.yaml
+      helm-values-production: helm/bebeque-service/values/biomass-ingestion.production.yaml
     secrets:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}

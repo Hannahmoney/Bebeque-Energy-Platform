@@ -7,8 +7,12 @@ on:
         description: "Service name matching ECR repo and Helm values file"
         required: true
         type: string
-      helm-values-file:
-        description: "Path to Helm values file relative to repo root"
+      helm-values-staging:
+        description: "Path to staging Helm values file relative to repo root"
+        required: true
+        type: string
+      helm-values-production:
+        description: "Path to production Helm values file relative to repo root"
         required: true
         type: string
     secrets:
@@ -25,8 +29,8 @@ jobs:
     name: Build and Push to ECR
     runs-on: ubuntu-latest
     permissions:
-      id-token: write   # required for OIDC token request
-      contents: read    # required to checkout the repo
+      id-token: write
+      contents: read
 
     outputs:
       image-tag: ${{ steps.meta.outputs.tag }}
@@ -40,7 +44,6 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/bebeque-github-actions-role
           aws-region: ${{ env.AWS_REGION }}
-          # Session duration 15 minutes — enough for build and push
           role-session-name: github-actions-${{ inputs.service-name }}
 
       - name: Log in to ECR
@@ -48,7 +51,6 @@ jobs:
 
       - name: Generate image tag from Git SHA
         id: meta
-        # Short SHA — first 7 characters, same format as GitHub UI shows
         run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Build Docker image
@@ -60,7 +62,6 @@ jobs:
       - name: Push to ECR
         run: |
           docker push ${{ env.ECR_REGISTRY }}/bebeque/${{ inputs.service-name }}:${{ steps.meta.outputs.tag }}
-      
 
   deploy-staging:
     name: Deploy to Staging
@@ -83,7 +84,6 @@ jobs:
           role-session-name: github-actions-${{ inputs.service-name }}-staging
 
       - name: Update kubeconfig
-        # Downloads cluster credentials — helm uses this to talk to EKS
         run: |
           aws eks update-kubeconfig \
             --region ${{ env.AWS_REGION }} \
@@ -99,17 +99,13 @@ jobs:
           helm upgrade --install ${{ inputs.service-name }} helm/bebeque-service \
             --namespace staging \
             --create-namespace \
-            --values ${{ inputs.helm-values-file }} \
-            --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
-            # --wait \
-            # --timeout 5m
+            --values ${{ inputs.helm-values-staging }} \
+            --set image.tag=${{ needs.build-and-push.outputs.image-tag }}
 
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [build-and-push, deploy-staging]
-    # This environment has a required reviewer — pipeline pauses here
-    # until nnnennaorjiugo-source approves in the GitHub UI
     environment: production
     permissions:
       id-token: write
@@ -142,7 +138,5 @@ jobs:
           helm upgrade --install ${{ inputs.service-name }} helm/bebeque-service \
             --namespace production \
             --create-namespace \
-            --values ${{ inputs.helm-values-file }} \
-            --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
-            # --wait \
-            # --timeout 5m
+            --values ${{ inputs.helm-values-production }} \
+            --set image.tag=${{ needs.build-and-push.outputs.image-tag }}

@@ -19,6 +19,7 @@ jobs:
     uses: ./.github/workflows/deploy-service.yml
     with:
       service-name: analytics-api
-      helm-values-file: helm/bebeque-service/values/analytics-api.staging.yaml
+      helm-values-staging: helm/bebeque-service/values/analytics-api.staging.yaml
+      helm-values-production: helm/bebeque-service/values/analytics-api.production.yaml
     secrets:
       AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
