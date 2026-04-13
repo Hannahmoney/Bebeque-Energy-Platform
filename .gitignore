@@ -1,7 +1,6 @@
 # Python
 __pycache__/
 *.pyc
-*.pyo
 *.pyd
 .Python
 *.egg-info/
@@ -13,14 +12,18 @@ build/
 .env.*
 !.env.example
 
-# Terraform - entire folder excluded
-terraform/
-
-# Helm - excluded for now
-helm/
-
-# Infrastructure folder
-infrastructure/
+# Terraform - secrets and local files only
+terraform/.terraform/
+terraform/**/.terraform/
+terraform/*.tfstate
+terraform/**/*.tfstate
+terraform/*.tfstate.backup
+terraform/**/*.tfstate.backup
+terraform/terraform.tfvars
+terraform/**/terraform.tfvars
+terraform/**/tfplan
+terraform/infra/tfplan
+crash.log
 
 # VS Code
 .vscode/
@@ -32,3 +35,7 @@ Thumbs.db
 # Temp and local files
 message.json
 .encvlocal
+test-biomass.json
+test-ingest.json
+test-notification.json
+test-readings.csv
