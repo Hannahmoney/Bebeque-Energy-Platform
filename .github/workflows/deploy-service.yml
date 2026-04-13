@@ -101,8 +101,8 @@ jobs:
             --create-namespace \
             --values ${{ inputs.helm-values-file }} \
             --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
-            --wait \
-            --timeout 5m
+            # --wait \
+            # --timeout 5m
 
   deploy-production:
     name: Deploy to Production
@@ -144,5 +144,5 @@ jobs:
             --create-namespace \
             --values ${{ inputs.helm-values-file }} \
             --set image.tag=${{ needs.build-and-push.outputs.image-tag }} \
-            --wait \
-            --timeout 5m
+            # --wait \
+            # --timeout 5m
